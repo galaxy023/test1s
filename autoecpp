@@ -1,0 +1,70 @@
+#include <Windows.h>
+
+int running = false;
+DWORD tid = 0;
+HANDLE thread;
+
+void pressKey(char key) {
+    UINT scanCode = MapVirtualKey(key, MAPVK_VK_TO_VSC);
+
+    keybd_event(key, scanCode, 0, 0);
+    keybd_event(key, scanCode, KEYEVENTF_KEYUP, 0);
+    keybd_event(key, scanCode, 0, 0);
+    keybd_event(key, scanCode, KEYEVENTF_KEYUP, 0);
+}
+
+DWORD WINAPI MyThreadFunction(LPVOID lpParam) {
+    int* r = (int*)lpParam;
+    while (*r) {
+        pressKey('E');
+    }
+    return 0;
+}
+
+LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    bool fEatKeyStroke = false;
+
+    if (nCode == HC_ACTION) {
+        switch (wParam) {
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+        case WM_KEYUP:
+        case WM_SYSKEYUP:
+            PKBDLLHOOKSTRUCT p = (PKBDLLHOOKSTRUCT)lParam;
+            if ((fEatKeyStroke = (p->vkCode == 0x51))) {
+                if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
+
+                    if (running == 0) {
+                        running = 1;
+                        thread = CreateThread(NULL, 0, MyThreadFunction, &running, 0, &tid);
+                    }
+                    else {
+                        running = 0;
+                        CloseHandle(thread);
+                    }
+                }
+                else if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP) {
+                }
+                break;
+            }
+            break;
+        }
+    }
+
+    return (fEatKeyStroke ? 1 : CallNextHookEx(NULL, nCode, wParam, lParam));
+}
+
+
+int main(void)
+{
+    HHOOK hhkLowLevelKybd = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, 0, 0);
+    MSG msg;
+
+    while (!GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+
+    UnhookWindowsHookEx(hhkLowLevelKybd);
+    return 0;
+}
